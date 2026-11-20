@@ -14,7 +14,7 @@ python second_brain.py
 ```
 
 Ollama must be running and accessible at `http://127.0.0.1:11434`. The app defaults
-to `qwen2.5vl:7b`, which is already installed.
+to `llama3.2:3b`, which is already installed.
 
 To use another installed model:
 

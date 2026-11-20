@@ -5,22 +5,26 @@ import json
 import os
 import re
 import sqlite3
-import urllib.request
 from pathlib import Path
 from urllib.parse import quote, urlsplit
+import requests
 
 ROOT = Path(os.environ.get("BRAIN_HOME", Path.home() / ".career-brain"))
-MODEL = os.environ.get("BRAIN_MODEL", "qwen2.5vl:7b")
+MODEL = os.environ.get("BRAIN_MODEL", "llama3.2:3b")
 CATEGORIES = ["Contact", "Skills", "Projects", "Experience", "Education",
               "Competitions and certifications", "Preferences"]
 
 
 def fetch(url, payload=None):
-    data = json.dumps(payload).encode() if payload is not None else None
-    req = urllib.request.Request(url, data=data, headers={
-        "User-Agent": "LocalCareerBrain", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=240) as response:
-        return json.load(response)
+    response = requests.request(
+        "POST" if payload is not None else "GET",
+        url,
+        json=payload,
+        headers={"User-Agent": "LocalCareerBrain", "Content-Type": "application/json"},
+        timeout=240,
+    )
+    response.raise_for_status()
+    return response.json()
 
 
 def model(task, data):
@@ -101,8 +105,8 @@ def github(db):
             try:
                 readme = fetch(repo["url"] + "/readme")
                 summary["readme"] = base64.b64decode(readme["content"]).decode(errors="replace")
-            except urllib.error.HTTPError as exc:
-                if exc.code != 404:
+            except requests.HTTPError as exc:
+                if exc.response is None or exc.response.status_code != 404:
                     raise
             ingest(db, repo["html_url"], json.dumps(summary, ensure_ascii=False, indent=2))
         if len(repos) < 100:
