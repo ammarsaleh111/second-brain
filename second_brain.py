@@ -140,6 +140,90 @@ def add_job(db, url, company, role, description):
                    (url, company, role, description))
 
 
+def profile_search_context(db):
+    facts = profile(db)
+    selected = [
+        item["body"] for item in facts
+        if item["category"] in ("Skills", "Preferences", "Projects")
+    ]
+    return "\n".join(selected)
+
+
+def search_jobs(db):
+    keywords = [
+        "full stack", "full-stack", "software engineer", "software developer",
+        "backend", "front end", "front-end", "frontend", "web developer",
+        "web development", "java developer", "php developer", "react developer",
+        "node.js", "nodejs", "javascript developer", "typescript developer",
+    ]
+
+    added = 0
+    limit = 50
+    sources = [
+        ("Remotive", "https://remotive.com/api/remote-jobs?category=software-dev"),
+        ("Arbeitnow", "https://www.arbeitnow.com/api/job-board-api"),
+        ("Remote OK", "https://remoteok.com/api"),
+    ]
+    for source, url in sources:
+        try:
+            data = fetch(url)
+            if isinstance(data, dict):
+                listings = data.get("jobs") or data.get("data") or []
+            elif isinstance(data, list):
+                listings = data
+            else:
+                listings = []
+
+            for listing in listings:
+                if not isinstance(listing, dict):
+                    continue
+                role = listing.get("title") or listing.get("position") or ""
+                company = (
+                    listing.get("company_name")
+                    or listing.get("company")
+                    or listing.get("company_name")
+                    or source
+                )
+                description = (
+                    listing.get("description")
+                    or listing.get("job_description")
+                    or listing.get("body")
+                    or ""
+                )
+                posting_url = (
+                    listing.get("url")
+                    or listing.get("absolute_url")
+                    or listing.get("link")
+                    or listing.get("job_url")
+                )
+                if not posting_url:
+                    continue
+
+                searchable = role.lower()
+                if not any(keyword in searchable for keyword in keywords):
+                    continue
+                if not str(posting_url).startswith("https://"):
+                    continue
+
+                location = listing.get("location") or listing.get("candidate_required_location") or ""
+                location_text = location if isinstance(location, str) else str(location)
+                before = db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+                add_job(db, str(posting_url), str(company), str(role),
+                        f"{location_text}\n{re.sub('<[^>]+>', ' ', description)}")
+                after = db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+                if after > before:
+                    added += 1
+                    if added >= limit:
+                        break
+            if added >= limit:
+                break
+        except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
+            print(f"{source} search unavailable:", exc)
+
+    print(f"Search complete. Added {added} new job postings.")
+    print("Keywords:", ", ".join(keywords))
+
+
 def draft(db, job, edits=""):
     excluded = json.loads(db.execute("SELECT value FROM settings WHERE key='excluded'").fetchone()[0])
     evidence = {r["id"]: r for r in profile(db) if r["id"] not in excluded}
@@ -190,7 +274,7 @@ def draft(db, job, edits=""):
 def main():
     db = database()
     while True:
-        print("\nfile | note | github | profile | job | greenhouse | match | tracker | applied | quit")
+        print("\nfile | note | github | profile | search | job | greenhouse | match | tracker | applied | quit")
         cmd = input("> ").strip().lower()
         try:
             if cmd == "quit":
@@ -204,11 +288,13 @@ def main():
                 github(db)
             elif cmd == "profile":
                 review(db)
-            elif cmd in ("job", "greenhouse", "match"):
+            elif cmd in ("search", "job", "greenhouse", "match"):
                 if not db.execute("SELECT 1 FROM settings WHERE key='ready'").fetchone():
                     print("Review and confirm your profile first.")
                     continue
-                if cmd == "job":
+                if cmd == "search":
+                    search_jobs(db)
+                elif cmd == "job":
                     add_job(db, input("Posting URL: "), input("Company: "), input("Title: "),
                             input("Paste description on one line or use @/path/to/posting.txt: "))
                 elif cmd == "greenhouse":

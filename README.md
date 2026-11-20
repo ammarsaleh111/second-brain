@@ -33,6 +33,7 @@ Profile data is stored at `%USERPROFILE%\.career-brain\career.sqlite3`.
 - `profile`: review extracted evidence and exclude false or shared-work entries.
 - `job`: add a job URL and description manually.
 - `greenhouse`: import openings from a Greenhouse company board.
+- `search`: search public job APIs automatically using your profile and preferences.
 - `match`: evaluate unreviewed jobs, with a 75% minimum score.
 - `tracker`: list saved applications.
 - `applied`: record that an approved application was submitted manually.
